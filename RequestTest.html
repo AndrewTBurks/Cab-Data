@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="utf-8">
+	<!-- Leaflet Style -->
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.0.2/dist/leaflet.css" />
+	<link rel="stylesheet" href="http://heyman.github.io/leaflet-areaselect/src/leaflet-areaselect.css">
+	<!-- D3 js -->
+  <script src="https://d3js.org/d3.v4.min.js"></script>
+	<!-- Leaflet js -->
+	<script src="https://unpkg.com/leaflet@1.0.2/dist/leaflet.js"></script>
+	<script src="http://heyman.github.io/leaflet-areaselect/src/leaflet-areaselect.js" charset="utf-8"></script>
+
+
+  <style>
+    body { margin:0;position:fixed;top:0;right:0;bottom:0;left:0; }
+
+		#map {
+			width: 100%;
+			height: 100%;
+		}
+
+		.leaflet-areaselect-container {
+		  position:absolute;
+		  width:100%;
+		  height:100%;
+		  z-index: 99999;
+
+			stroke: black;
+		}
+
+		.leaflet-areaselect-shade {
+			background: none;
+		}
+
+  </style>
+</head>
+
+<body>
+	<div id="map">
+
+	</div>
+
+  <script>
+
+	var objects = [];
+
+	var selectionBG = null;
+	var censusTracts = null;
+
+
+  var base = "https://data.cityofchicago.org/resource/wrvz-psew.json/?";
+	var limit = "$limit=100";
+	var query = "$select=pickup_centroid_location, dropoff_centroid_location, pickup_census_tract, dropoff_census_tract";
+	var time = "$where=trip_start_timestamp between '2015-01-10T12:00:00' and '2015-01-10T14:00:00'"
+	var group = "$group=dropoff_census_tract"
+
+	var map = L.map('map', {
+    center: [41.8781, -87.6298],
+    zoom: 13
+	});
+
+	L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}', {
+    attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://mapbox.com">Mapbox</a>',
+    maxZoom: 18,
+    id: 'mapbox.streets',
+    accessToken: 'pk.eyJ1IjoiYW5kcmV3dGJ1cmtzIiwiYSI6ImNpdnNmcHQ0ejA0azYydHBrc3drYWRwcTgifQ.pCA_a_l6sPcMo8oGzg5stQ',
+	})
+	.addTo(map);
+
+	var areaSelect = L.areaSelect({width:200, height:300});
+	areaSelect.on("change", function() {
+		if (selectionBG) { selectionBG.remove(); }
+
+		var bounds = this.getBounds();
+
+		var within = "$where=within_box(pickup_centroid_location, " +
+		 bounds._northEast.lat + ", " + bounds._southWest.lng + ", " +
+		 bounds._southWest.lat + ", " + bounds._northEast.lng + ")" + " AND " +
+		 "trip_start_timestamp between '2015-01-10T12:00:00' and '2015-01-10T14:00:00'";
+
+		dataRequest(base+[query,within,limit].join("&"), useData);
+
+		selectionBG = L.rectangle(bounds, {color: "#ff7800", weight: 1}).addTo(map);
+	});
+	areaSelect.addTo(map);
+
+	d3.json("./tracts.geojson", (err, data) => {
+		censusTracts = L.geoJSON(data, {
+			style: function (feature) {
+        return {
+					color: "black",
+					weight: 0.5,
+					strokeOpacity: 0.5,
+					fillColor: "#fbb4ae",
+					fillOpacity: 0.5,
+					className: ("censusTract tract" + feature.properties.geoid10)
+				};
+	    }
+		})
+		.addTo(map);
+
+		dataRequest(base+[query,limit,time].join("&"), useData);
+	});
+
+  var useData = function(pe, data) {
+    console.log(pe);
+	 	var filtered = data.filter((el) => el.pickup_centroid_location && el.dropoff_centroid_location)
+
+		for (obj of objects) {
+			obj.remove();
+		}
+		objects = [];
+
+		d3.selectAll(".censusTract")
+			.style("fill-opacity", 0);
+
+		for (var el of filtered) {
+			d3.select(".tract" + el.dropoff_census_tract)
+				.style("fill-opacity", 0.5);
+
+			// lat-lngs
+			var ll = [el.pickup_centroid_location.coordinates.reverse(), el.dropoff_centroid_location.coordinates.reverse()];
+
+			objects.push(L.polyline(ll, {
+		    color: 'white',
+				weight: 1
+			})
+			.addTo(map));
+
+			objects.push(L.circle(el.pickup_centroid_location.coordinates, {
+		    color: '#377eb8',
+		    fillColor: '#67a9cf',
+		    fillOpacity: 1,
+		    radius: 5
+			})
+			.addTo(map));
+
+
+			objects.push(L.circle(el.dropoff_centroid_location.coordinates, {
+		    color: '#e41a1c',
+		    fillColor: '#ef8a62',
+		    fillOpacity: 0.5,
+		    radius: 5
+			})
+			.addTo(map));
+
+		}
+
+
+  };
+
+	// method to request data
+	function dataRequest(query, callback) {
+		// console.log(query);
+
+		var xhr = new XMLHttpRequest();
+	  xhr.open("GET", query);
+
+	  xhr.onprogress = function(pe) {
+	    if (pe.lengthComputable) {
+	      console.log("Progress", pe.loaded / pe.total);
+	    }
+	  };
+
+	  xhr.onloadend = function(pe) {
+			if (callback) {
+				callback(pe, JSON.parse(xhr.response));
+			}
+	  };
+
+	  xhr.send();
+	}
+
+  </script>
+</body>
