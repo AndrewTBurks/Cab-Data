@@ -53,22 +53,24 @@
 
   var tractColorScale = d3.scaleLinear()
     .domain([0,1])
-    .range(["#fee090", "#fc8d59", "#d73027"]);
+    .range(["#fddbc7", "#ef8a62", "#b2182b"]);
 
   var binColorScale = d3.scaleLinear() 
     .domain([0,1])
-    .range(["#e0f3f8", "#91bfdb", "#4575b4"]);
+    // .range(["#e0f3f8", "#91bfdb", "#4575b4"]);
+    .range(["#67a9cf", "#2166ac"]);
+
 
 
   var base = "https://data.cityofchicago.org/resource/wrvz-psew.json/?";
-	var limit = "$limit=100000";
+	var limit = "$limit=100000"; // 100,000
 	var query = "$select=pickup_centroid_location, dropoff_centroid_location, pickup_census_tract, dropoff_census_tract";
-	var time = "$where=trip_start_timestamp between '2015-01-01T12:00:00' and '2015-02-01T14:00:00'";
+	var time = "$where=trip_start_timestamp between '2015-01-01T12:00:00' and '2016-02-01T14:00:00'";
 	var group = "$group=dropoff_census_tract";
 
 	var map = L.map('map', {
     center: [41.8781, -87.6298],
-    zoom: 13
+    zoom: 10.5
 	});
 
 	L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}', {
@@ -81,17 +83,20 @@
 
 
 
-	var areaSelect = L.areaSelect({width:200, height:200, keepAspectRatio:true});
+	var areaSelect = L.areaSelect({width:200, height:200, keepAspectRatio:false});
 
 	areaSelect.on("change", function() {
 		d3.selectAll(".currSelection").remove();
-    d3.selectAll(".mosaic").remove();
+    d3.selectAll(".bin").remove();
 
 		var bounds = selectionBounds = this.getBounds();
 
 		var within = "$where=within_box(pickup_centroid_location, " +
 		 bounds._northEast.lat + ", " + bounds._southWest.lng + ", " +
 		 bounds._southWest.lat + ", " + bounds._northEast.lng + ")" + " AND " +
+     "NOT within_box(dropoff_centroid_location, " +
+     bounds._northEast.lat + ", " + bounds._southWest.lng + ", " +
+     bounds._southWest.lat + ", " + bounds._northEast.lng + ")" + " AND " +
 		 "trip_start_timestamp between '2015-01-10T12:00:00' and '2015-01-10T14:00:00'";
 
 		dataRequest(base+[query,within,limit].join("&"), useData);
@@ -106,7 +111,7 @@
 			style: function (feature) {
         return {
 					color: "black",
-					weight: 0.5,
+					weight: 1,
 					strokeOpacity: 0.5,
 					fillColor: "#fbb4ae",
 					fillOpacity: 0.5,
@@ -116,7 +121,7 @@
 		})
 		.addTo(map);
 
-		// dataRequest(base+[query,limit,time].join("&"), useData);
+		dataRequest(base+[query,limit,time].join("&"), useData);
 	});
 
   var useData = function(pe, data) {
@@ -132,11 +137,9 @@
 			.style("fill-opacity", 0)
       .style("stroke", "none");
 
-    d3.selectAll(".bin").remove();
-
     var tractAggregate = {};
 
-    var binResolution = Math.round(areaSelect._width / 20);
+    var binResolution = d3.max([0, Math.round(areaSelect._width / 20)]);
     var binWidth = (selectionBounds._northEast.lng - selectionBounds._southWest.lng) / binResolution,
       binHeight = (selectionBounds._southWest.lat - selectionBounds._northEast.lat) / binResolution;
 
@@ -169,37 +172,6 @@
         binsAggregate[x][y]++;
       }
 
-
-
-			// d3.select(".tract" + el.dropoff_census_tract)
-				// .style("fill-opacity", 0.5);
-
-			// lat-lngs
-			// var ll = [el.pickup_centroid_location.coordinates.reverse(), el.dropoff_centroid_location.coordinates.reverse()];
-
-			// objects.push(L.polyline(ll, {
-		  //   color: 'white',
-			// 	weight: 1
-			// })
-			// .addTo(map));
-
-			// objects.push(L.circle(el.pickup_centroid_location.coordinates, {
-		 //    color: '#377eb8',
-		 //    fillColor: '#67a9cf',
-		 //    fillOpacity: 1,
-		 //    radius: 5
-			// })
-			// .addTo(map));
-
-
-			// objects.push(L.circle(el.dropoff_centroid_location.coordinates, {
-		 //    color: '#e41a1c',
-		 //    fillColor: '#ef8a62',
-		 //    fillOpacity: 0.5,
-		 //    radius: 5
-			// })
-			// .addTo(map));
-
 		}
 
     // define color scales
@@ -207,13 +179,17 @@
     tractColorScale.domain([tractExtent[0], (tractExtent[1] + tractExtent[0]) / 2, tractExtent[1]]);
 
     var binMin = d3.min(binsAggregate, (el) => {
-        return d3.min(el.filter((v) => v > 0));
+        // return d3.min(el.filter((v) => v > 0));
+        return d3.min(el);
       }),
       binMax = d3.max(binsAggregate, (el) => {
-        return d3.max(el.filter((v) => v > 0));
+        // return d3.max(el.filter((v) => v > 0));
+        return d3.max(el);
       });
 
-    binColorScale.domain([binMin, (binMax + binMin) / 2, binMax]); 
+    // binColorScale.domain([binMin, (binMax + binMin) / 2, binMax]); 
+    binColorScale.domain([binMin, binMax]); 
+
 
 
     // draw information onto map
@@ -228,18 +204,27 @@
 
     for (var i = 0; i < binResolution; i++) { // y
       for (var j = 0; j < binResolution; j++) { // x
-        var binBounds = [[latMin + (i*binHeight), lngMin + (j*binWidth)], [latMin + ((i + 1)*binHeight), lngMin + ((j + 1)*binWidth)]];
+        var binBounds = [[latMin + (i*binHeight), lngMin + ((binResolution - j - 1)*binWidth)], [latMin + ((i + 1)*binHeight), lngMin + ((binResolution - j)*binWidth)]];
 
         L.rectangle(binBounds,
           {
             fillColor: binColorScale(binsAggregate[j][i]), 
-            color: "black",
-            weight: 0.5,
-            className: "bin",
-            opacity: binsAggregate[j][i] === 0 ? 0 : 1,
-            fillOpacity: binsAggregate[j][i] === 0 ? 0 : 1
+            color: binsAggregate[j][i] === 0 ? "gray": "white",
+            weight: binsAggregate[j][i] === 0 ? 0.5: 2,
+            className: "bin bin" + j + "_" + i,
+            // opacity: binsAggregate[j][i] === 0 ? 0 : 1,
+            fillOpacity: binsAggregate[j][i] === 0 ? 0 : 0.5
           })
         .addTo(map);
+      }
+    }
+
+    for (var i = 0; i < binResolution; i++) { // y
+      for (var j = 0; j < binResolution; j++) { // x
+        if (binsAggregate[j][i] > 0) {
+          d3.select(".bin" + j + "_" + i)
+            .node().parentNode.appendChild(d3.select(".bin" + j + "_" + i).node());
+        }
       }
     }
 
@@ -263,6 +248,8 @@
 
 	  xhr.onloadend = function(pe) {
 			if (callback) {
+        console.log(JSON.parse(xhr.response).length);
+
         enableInteraction(map);
         d3.selectAll(".currSelection")
           // .style("fill", "#31a354")
