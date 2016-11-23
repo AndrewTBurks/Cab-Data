@@ -4,11 +4,13 @@
 	<!-- Leaflet Style -->
 	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.0.2/dist/leaflet.css" />
 	<link rel="stylesheet" href="http://heyman.github.io/leaflet-areaselect/src/leaflet-areaselect.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-easybutton@2.0.0/src/easy-button.css">
 	<!-- D3 js -->
   <script src="https://d3js.org/d3.v4.min.js"></script>
 	<!-- Leaflet js -->
 	<script src="https://unpkg.com/leaflet@1.0.2/dist/leaflet.js"></script>
 	<script src="http://heyman.github.io/leaflet-areaselect/src/leaflet-areaselect.js" charset="utf-8"></script>
+  <script src="https://unpkg.com/leaflet-easybutton@2.0.0/src/easy-button.js"></script>
 
 
   <style>
@@ -51,8 +53,8 @@
   var base = "https://data.cityofchicago.org/resource/wrvz-psew.json/?";
 	var limit = "$limit=100";
 	var query = "$select=pickup_centroid_location, dropoff_centroid_location, pickup_census_tract, dropoff_census_tract";
-	var time = "$where=trip_start_timestamp between '2015-01-10T12:00:00' and '2015-01-10T14:00:00'"
-	var group = "$group=dropoff_census_tract"
+	var time = "$where=trip_start_timestamp between '2015-01-10T12:00:00' and '2015-01-10T14:00:00'";
+	var group = "$group=dropoff_census_tract";
 
 	var map = L.map('map', {
     center: [41.8781, -87.6298],
@@ -67,9 +69,13 @@
 	})
 	.addTo(map);
 
+
+
 	var areaSelect = L.areaSelect({width:200, height:300});
+
 	areaSelect.on("change", function() {
-		if (selectionBG) { selectionBG.remove(); }
+		d3.selectAll(".currSelection").remove();
+    d3.selectAll(".mosaic").remove();
 
 		var bounds = this.getBounds();
 
@@ -80,8 +86,9 @@
 
 		dataRequest(base+[query,within,limit].join("&"), useData);
 
-		selectionBG = L.rectangle(bounds, {color: "#ff7800", weight: 1}).addTo(map);
+		selectionBG = L.rectangle(bounds, {color: "#de2d26", weight: 1, className: "currSelection"}).addTo(map);
 	});
+
 	areaSelect.addTo(map);
 
 	d3.json("./tracts.geojson", (err, data) => {
@@ -151,6 +158,8 @@
 
 	// method to request data
 	function dataRequest(query, callback) {
+    disableInteraction(map);
+
 		// console.log(query);
 
 		var xhr = new XMLHttpRequest();
@@ -164,12 +173,40 @@
 
 	  xhr.onloadend = function(pe) {
 			if (callback) {
+        enableInteraction(map);
+        d3.selectAll(".currSelection")
+          .style("fill", "#31a354")
+          .style("stroke", "#31a354")
+          .style("stroke-width", 3);
+
 				callback(pe, JSON.parse(xhr.response));
 			}
 	  };
 
 	  xhr.send();
 	}
+
+  function disableInteraction(map) {
+    map.dragging.disable();
+    map.touchZoom.disable();
+    map.doubleClickZoom.disable();
+    map.scrollWheelZoom.disable();
+    map.boxZoom.disable();
+    map.keyboard.disable();
+    if (map.tap) map.tap.disable();
+    document.getElementById('map').style.cursor='default';
+  }
+
+  function enableInteraction(map) {
+    map.dragging.enable();
+    map.touchZoom.enable();
+    map.doubleClickZoom.enable();
+    map.scrollWheelZoom.enable();
+    map.boxZoom.enable();
+    map.keyboard.enable();
+    if (map.tap) map.tap.enable();
+    document.getElementById('map').style.cursor='';
+  }
 
   </script>
 </body>
