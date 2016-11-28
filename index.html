@@ -125,10 +125,30 @@
 
     .minScale {
       left: 0px;
+      text-align: left;
     }
 
     .maxScale {
       right: 0px;
+      text-align: right;
+    }
+
+    #tip {
+      display: block;
+      position: absolute;
+
+      padding: 5px;
+
+      display: none;
+      z-index: 2000;
+
+      pointer-events: none;
+
+      text-align: center;
+
+      font-family: Helvetica, sansserif;
+      font-weight: bold;
+      background-color: rgba(255,255,255,0.8);
     }
 
 		.leaflet-areaselect-container {
@@ -148,6 +168,9 @@
 </head>
 
 <body onload="init()">
+  <div id="tip">
+    
+  </div>
 	<div id="map">
 
 	</div>
@@ -165,10 +188,10 @@
       <div id ="tractLegend">
         Tract
         <span class="scale minScale" id="tractMin">
-          0
+          Out<br>0
         </span>
         <span class="scale maxScale" id="tractMax">
-          10
+          In<br>10
         </span>
 
       </div>

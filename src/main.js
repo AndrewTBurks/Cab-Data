@@ -21,11 +21,54 @@ var binColorScale = d3.scaleLinear()
   .domain([0,1])
   .range(["#998ec3", "#542788"]);
 
-var base = "https://data.cityofchicago.org/resource/wrvz-psew.json/?";
-var limit = "$limit=100000"; // 100,000
-var query = "$select=pickup_centroid_location, dropoff_centroid_location, pickup_census_tract, dropoff_census_tract";
-var time = "$where=trip_start_timestamp between '2015-01-01T12:00:00' and '2016-02-01T14:00:00'";
-var group = "$group=dropoff_census_tract";
+var query = {
+  base: "https://data.cityofchicago.org/resource/wrvz-psew.json/?",
+  limit: "$limit=100000", // 100,000
+  query: "$select=pickup_centroid_location, dropoff_centroid_location, pickup_census_tract, dropoff_census_tract",
+  time: "$where=trip_start_timestamp between '2015-01-01T12:00:00' and '2016-02-01T14:00:00'",
+  group: "$group=dropoff_census_tract",
+  make: function(bounds) {
+    var within;
+
+    var withinVar = "";
+    var notWithinVar = "";
+
+    if (queryMode === "queryOrig") {
+      withinVar = "pickup_centroid_location";
+      notWithinVar = "dropoff_centroid_location";
+    } else {
+      withinVar = "dropoff_centroid_location";
+      notWithinVar = "pickup_centroid_location";
+    }
+
+    if (bounds) {
+      within = "$where=within_box(" + withinVar + ", " + 
+        bounds._northEast.lat + ", " + bounds._southWest.lng + ", " +
+        bounds._southWest.lat + ", " + bounds._northEast.lng + ")" + " AND " +
+        "NOT within_box(" + notWithinVar + ", " + 
+        bounds._northEast.lat + ", " + bounds._southWest.lng + ", " +
+        bounds._southWest.lat + ", " + bounds._northEast.lng + ")" + " AND " +
+        "trip_start_timestamp between '2015-01-01T12:00:00' and '2016-02-01T14:00:00'";
+    } else {
+      within = "$where=trip_start_timestamp between '2015-01-01T12:00:00' and '2016-02-01T14:00:00'";
+    }
+
+    return this.base + [this.query,this.limit,within].join("&");
+  }
+}
+
+var time = {
+  base: "https://data.cityofchicago.org/resource/wrvz-psew.json/?",
+  limit: "$limit=100000", // 100,000
+  query: "$select=pickup_centroid_location, dropoff_centroid_location, pickup_census_tract, dropoff_census_tract, trip_start_timestamp, trip_end_timestamp",
+  order: "$order=trip_start_timestamp"
+  make: function(start, end) {
+
+    var within = "$where=trip_start_timestamp between '" + start + "' and '" + end + "'"
+
+    return this.base + [this.query,this.limit,within].join("&");
+  }
+}
 
 function init() {
 
@@ -54,6 +97,44 @@ function init() {
   areaSelect.addTo(map);
 
   d3.json("./tracts.geojson", (err, data) => {
+    function whenClicked(e) {
+      // draw graph of data over time
+    }
+
+    function whenHovered (e) {
+      d3.select(".tract" + e.target.feature.properties.geoid10)
+        .style("stroke", "red")
+        .style("stroke-width", 3);
+
+      d3.select("#tip")
+        .style("display", "initial")
+        .style("left", e.containerPoint.x + 15 + "px")
+        .style("top", e.containerPoint.y - 45 + "px")
+        .node().innerHTML = "Tract:<br>" + e.target.feature.properties.geoid10;
+    }
+    
+
+    function onEachFeature(feature, layer) {
+        //bind click
+        layer.on({
+            click: whenClicked,
+            mouseover: whenHovered,
+            mouseout: function(e) {
+              d3.select(".tract" + e.target.feature.properties.geoid10)
+                .style("stroke", function(d) {
+                  if (d3.select(this).classed("isVisible")) {
+                    return "black";
+                  }
+                  return "none";
+                })
+                .style("stroke-width", 1);
+
+              d3.select("#tip")
+                .style("display", "none");
+            }
+        });
+    }
+
     censusTracts = L.geoJSON(data, {
       style: function (feature) {
         return {
@@ -64,11 +145,12 @@ function init() {
           fillOpacity: 0.5,
           className: ("censusTract tract" + feature.properties.geoid10)
         };
-      }
+      },
+      onEachFeature: onEachFeature
     })
     .addTo(map);
 
-    dataRequest(base+[query,limit,time].join("&"), useData);
+    dataRequest(query.make(), useData);
   });
 
   
@@ -91,19 +173,9 @@ function queryArea(mode) {
   d3.selectAll(".currSelection").remove();
   d3.selectAll(".bin").remove();
 
-  var bounds = selectionBounds;
+  dataRequest(query.make(selectionBounds), useData);
 
-  var within = "$where=within_box(" + withinVar + ", " + 
-   bounds._northEast.lat + ", " + bounds._southWest.lng + ", " +
-   bounds._southWest.lat + ", " + bounds._northEast.lng + ")" + " AND " +
-   "NOT within_box(" + notWithinVar + ", " + 
-   bounds._northEast.lat + ", " + bounds._southWest.lng + ", " +
-   bounds._southWest.lat + ", " + bounds._northEast.lng + ")" + " AND " +
-   "trip_start_timestamp between '2015-01-10T12:00:00' and '2015-01-10T14:00:00'";
-
-  dataRequest(base+[query,within,limit].join("&"), useData);
-
-  selectionBG = L.rectangle(bounds, {color: "#de2d26", weight: 1, className: "currSelection"}).addTo(map);
+  selectionBG = L.rectangle(selectionBounds, {color: "#de2d26", weight: 1, className: "currSelection"}).addTo(map);
 }
 
 function toggleMode() {
@@ -205,7 +277,8 @@ var useData = function(pe, data) {
 
     d3.selectAll(".censusTract")
       .style("fill-opacity", 0)
-      .style("stroke", "none");
+      .style("stroke", "none")
+      .classed("isVisible", false);
 
     var tractAggregate = {};
 
@@ -280,7 +353,8 @@ var useData = function(pe, data) {
           return tractColorScale(tractAggregate[t]);
         })
         .style("fill-opacity", 0.5)
-        .style("stroke", "black");
+        .style("stroke", "black")
+        .classed("isVisible", true);
     }
 
     for (var i = 0; i < binResolution; i++) { // y
@@ -323,8 +397,6 @@ var useData = function(pe, data) {
 // method to request data
 function dataRequest(query, callback) {
   disableInteraction(map);
-
-  // console.log(query);
 
   var xhr = new XMLHttpRequest();
   xhr.open("GET", query);
