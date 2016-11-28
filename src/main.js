@@ -125,6 +125,9 @@ function toggleMode() {
       .style("display", "none");
     d3.selectAll(".bin").remove();
 
+    d3.select("#tractLegend")
+      .style("background", "linear-gradient(to right, #542788, #f7f7f7, #b35806)");
+
     d3.select(".leaflet-areaselect-container")
       .style("display", "none");
 
@@ -146,6 +149,12 @@ function toggleMode() {
 
     d3.select("#gridLegend")
     .style("display", "initial");
+
+    // dest
+    d3.select("#tractLegend")
+      .style("background", queryMode === "queryOrig" ? 
+        "linear-gradient(to right, #fee0b6, #f1a340, #b35806)" : // origin
+        "linear-gradient(to right, #d8daeb, #998ec3, #542788)"); // destination
 
 
     d3.selectAll(".currSelection")
@@ -299,6 +308,15 @@ var useData = function(pe, data) {
         }
       }
     }
+  } else if (mode === "time") {
+    // withinVar = "dropoff_centroid_location";
+    // notWithinVar = "pickup_census_tract";
+
+    // tractColorScale.range(["#d8daeb", "#998ec3", "#542788"]);
+    // binColorScale.range(["#f1a340", "#b35806"]);
+
+    d3.select("#tractLegend")
+      .style("background", "linear-gradient(to right, #542788, #998ec3, #d8daeb, #f7f7f7, #fee0b6, #f1a34, #b35806)");
   }
 };
 
