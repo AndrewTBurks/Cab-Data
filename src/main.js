@@ -5,7 +5,7 @@ var selectionBounds = null;
 
 var censusTracts = null;
 
-var mode = "query"; // or "query"
+var mode = "query"; // or "time"
 var queryMode = "queryOrig";
 
 var areaSelect = L.areaSelect({width:200, height:200, keepAspectRatio:false});
@@ -20,6 +20,10 @@ var tractColorScale = d3.scaleLinear()
 var binColorScale = d3.scaleLinear() 
   .domain([0,1])
   .range(["#998ec3", "#542788"]);
+
+var changeColorScale = d3.scaleLinear()
+  .domain([-10, 0, 10])
+  .range(["#542788", "#f7f7f7", "#b35806"]);
 
 var query = {
   base: "https://data.cityofchicago.org/resource/wrvz-psew.json/?",
@@ -61,13 +65,15 @@ var time = {
   base: "https://data.cityofchicago.org/resource/wrvz-psew.json/?",
   limit: "$limit=100000", // 100,000
   query: "$select=pickup_centroid_location, dropoff_centroid_location, pickup_census_tract, dropoff_census_tract, trip_start_timestamp, trip_end_timestamp",
-  order: "$order=trip_start_timestamp"
-  make: function(start, end) {
+  group: "$group=trip_start_timestamp",
+  make: function(start = "2015-01-01T12:00:00", end = "2015-01-03T12:00:00") {
 
-    var within = "$where=trip_start_timestamp between '" + start + "' and '" + end + "'"
+    var within = "$where=trip_start_timestamp between '" + start + "' and '" + end + "'" + " OR " + 
+      "trip_end_timestamp between '" + start + "' and '" + end + "'"
 
     return this.base + [this.query,this.limit,within].join("&");
-  }
+  },
+  aggregated: null
 }
 
 function init() {
@@ -99,6 +105,9 @@ function init() {
   d3.json("./tracts.geojson", (err, data) => {
     function whenClicked(e) {
       // draw graph of data over time
+      if (mode === "time" && time.aggregated) {
+        console.log(time.aggregated[e.target.feature.properties.geoid10]);
+      }
     }
 
     function whenHovered (e) {
@@ -193,6 +202,12 @@ function toggleMode() {
     d3.select("#gridLegend")
       .style("display", "none");
 
+      d3.select("#tractMid")
+      .style("display", "initial");
+
+    d3.select("#tractName")
+      .text("Change");
+
     d3.selectAll(".currSelection")
       .style("display", "none");
     d3.selectAll(".bin").remove();
@@ -202,6 +217,8 @@ function toggleMode() {
 
     d3.select(".leaflet-areaselect-container")
       .style("display", "none");
+
+    dataRequest(time.make(), useData);
 
   } else if (mode === "time") {
     mode = "query";
@@ -221,6 +238,12 @@ function toggleMode() {
 
     d3.select("#gridLegend")
     .style("display", "initial");
+
+    d3.select("#tractMid")
+      .style("display", "none");
+
+    d3.select("#tractName")
+      .text("Tract");
 
     // dest
     d3.select("#tractLegend")
@@ -383,14 +406,126 @@ var useData = function(pe, data) {
       }
     }
   } else if (mode === "time") {
+    d3.selectAll(".censusTract")
+      .style("fill-opacity", 0)
+      .style("stroke", "none")
+      .classed("isVisible", false);
+
     // withinVar = "dropoff_centroid_location";
     // notWithinVar = "pickup_census_tract";
 
     // tractColorScale.range(["#d8daeb", "#998ec3", "#542788"]);
     // binColorScale.range(["#f1a340", "#b35806"]);
 
-    d3.select("#tractLegend")
-      .style("background", "linear-gradient(to right, #542788, #998ec3, #d8daeb, #f7f7f7, #fee0b6, #f1a34, #b35806)");
+    // event time
+    // 2015-01-02T12:00:00
+
+    var startDate = new Date("2015-01-01T12:00:00"),
+      endDate = new Date("2015-01-03T12:00:00");
+
+    var numTimesteps = (endDate.getTime() - startDate.getTime()) / (15 * 60000) + 1;
+
+    var timesteps = {};
+
+    // 15 minute intervals (trips are on 15 minute intervals also)
+    // for (var t = startDate.getTime(); t <= endDate.getTime(); t += (15 * 60000)) {
+    //   timesteps["" + t] = {pickup: 0, dropoff: 0};
+    // }
+
+
+    var event = "2015-01-02T12:00:00";
+    var eventTime = new Date(event).getTime();
+
+
+    var filtered = data.filter((el) => el.dropoff_census_tract && el.pickup_census_tract);
+
+    var aggregated = time.aggregated = {};
+
+    for (var t of filtered) {
+      if (!aggregated[t.pickup_census_tract]) {
+        aggregated[t.pickup_census_tract] = {
+          before: {pickup: 0, dropoff: 0},
+          after: {pickup: 0, dropoff: 0},
+          // byTime: Object.assign({}, timesteps)
+          // byTime: {}
+          byTime: new Array(numTimesteps)
+        }
+
+        // for (var key in Object.keys(timesteps)) {
+        //   aggregated[t.pickup_census_tract].byTime[key] = {pickup: 0, dropoff: 0};
+        // }
+
+        for (var i = 0; i < numTimesteps; i++) {
+          aggregated[t.pickup_census_tract].byTime[i] = {pickup: 0, dropoff: 0};
+        }
+
+      }
+
+      if (!aggregated[t.dropoff_census_tract]) {
+        aggregated[t.dropoff_census_tract] = {
+          before: {pickup: 0, dropoff: 0},
+          after: {pickup: 0, dropoff: 0},
+          // byTime: Object.assign({}, timesteps)
+          // byTime: {}
+          byTime: new Array(numTimesteps)
+        }
+
+        // for (var key in Object.keys(timesteps)) {
+        //   aggregated[t.dropoff_census_tract].byTime[key] = {pickup: 0, dropoff: 0};
+        // }
+      
+        for (var i = 0; i < numTimesteps; i++) {
+          aggregated[t.dropoff_census_tract].byTime[i] = {pickup: 0, dropoff: 0};
+        }
+      }
+
+      var tripStart = new Date(t.trip_start_timestamp).getTime();
+      var tripEnd = new Date(t.trip_end_timestamp).getTime();
+
+      // save trip start if within window 
+      if (tripStart <= endDate.getTime() && tripStart >= startDate.getTime()) {
+        aggregated[t.pickup_census_tract].byTime[Math.round((endDate.getTime() - tripStart) / (15*60000))].pickup++;
+
+        if (tripStart < eventTime) {
+          aggregated[t.pickup_census_tract].before.pickup++;
+        } else {
+          aggregated[t.pickup_census_tract].after.pickup++;
+        }
+      }
+
+      // save trip end
+      if (tripEnd <= endDate.getTime() && tripEnd >= startDate.getTime()) {
+        aggregated[t.dropoff_census_tract].byTime[Math.round((endDate.getTime() - tripEnd) / (15*60000))].dropoff++;
+
+        if (tripEnd < eventTime) {
+          aggregated[t.dropoff_census_tract].before.dropoff++;
+        } else {
+          aggregated[t.dropoff_census_tract].after.dropoff++;
+        }
+      }
+    }
+
+    var changeExtent = d3.extent(Object.keys(aggregated), 
+      t => (aggregated[t].after.pickup + aggregated[t].after.dropoff) - (aggregated[t].before.pickup + aggregated[t].before.dropoff));
+
+    changeColorScale.domain([changeExtent[0], 0, changeExtent[1]]);
+
+    d3.select("#tractMax")
+      .text(changeExtent[1]);
+
+    d3.select("#tractMin")
+      .text(changeExtent[0]);
+
+    for(var t of Object.keys(aggregated)) {
+      var change = (aggregated[t].after.pickup + aggregated[t].after.dropoff) - (aggregated[t].before.pickup + aggregated[t].before.dropoff);
+  
+      d3.select(".tract" + t)
+        .style("fill", changeColorScale(change))
+        .style("fill-opacity", 0.5)
+        .style("stroke", "black")
+        .classed("isVisible", true);
+    }
+
   }
 };
 

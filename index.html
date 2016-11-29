@@ -133,6 +133,14 @@
       text-align: right;
     }
 
+    .midScale {
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+
+      display: none;
+    }
+
     #tip {
       display: block;
       position: absolute;
@@ -186,9 +194,12 @@
 
     <div id="legends">
       <div id ="tractLegend">
-        Tract
+        <span id="tractName">Tract</span>
         <span class="scale minScale" id="tractMin">
           Out<br>0
+        </span>
+        <span class="scale midScale" id="tractMid">
+          0
         </span>
         <span class="scale maxScale" id="tractMax">
           In<br>10
