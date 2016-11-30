@@ -6,7 +6,7 @@ var selectionBounds = null;
 var censusTracts = null;
 
 var mode = "query"; // or "time"
-var queryMode = "queryOrig";
+var queryMode = null;
 
 var areaSelect = L.areaSelect({width:200, height:200, keepAspectRatio:false});
 var selectorMode = "visible";
@@ -27,7 +27,7 @@ var changeColorScale = d3.scaleLinear()
 
 var query = {
   base: "https://data.cityofchicago.org/resource/wrvz-psew.json/?",
-  limit: "$limit=100000", // 10,000
+  limit: "$limit=10000", // 10,000
   query: "$select=pickup_centroid_location, dropoff_centroid_location, pickup_census_tract, dropoff_census_tract",
   time: "$where=trip_start_timestamp between '2015-01-01T12:00:00' and '2016-02-01T14:00:00'",
   group: "$group=dropoff_census_tract",
@@ -63,7 +63,7 @@ var query = {
 
 var time = {
   base: "https://data.cityofchicago.org/resource/wrvz-psew.json/?",
-  limit: "$limit=100000", // 10,000
+  limit: "$limit=1000000", // 1,000,000
   query: "$select=pickup_centroid_location, dropoff_centroid_location, pickup_census_tract, dropoff_census_tract, trip_start_timestamp, trip_end_timestamp",
   group: "$group=trip_start_timestamp",
   make: function(start = "2015-01-01T12:00:00", end = "2015-01-03T12:00:00") {
@@ -392,11 +392,17 @@ var useData = function(pe, data) {
     // binColorScale.domain([binMin, (binMax + binMin) / 2, binMax]);
     binColorScale.domain([binMin, binMax]);
 
+    d3.select("#tractName")
+      .text(queryMode === "queryOrig" ? "Dropoffs" : "Pickups");
+
     d3.select("#tractMax")
       .text(tractExtent[1]);
 
     d3.select("#tractMin")
       .text(tractExtent[0]);
+
+    d3.select("#gridName")
+      .text(queryMode === "queryOrig" ? "Pickups": "Dropoffs");
 
     d3.select("#gridMax")
       .text(binMax);
@@ -418,20 +424,22 @@ var useData = function(pe, data) {
         .classed("isVisible", true);
     }
 
-    for (var i = 0; i < binResolution; i++) { // y
-      for (var j = 0; j < binResolution; j++) { // x
-        var binBounds = [[latMin + (i*binHeight), lngMin + ((binResolution - j - 1)*binWidth)], [latMin + ((i + 1)*binHeight), lngMin + ((binResolution - j)*binWidth)]];
+    if(queryMode !== null) {
+      for (var i = 0; i < binResolution; i++) { // y
+        for (var j = 0; j < binResolution; j++) { // x
+          var binBounds = [[latMin + (i*binHeight), lngMin + ((binResolution - j - 1)*binWidth)], [latMin + ((i + 1)*binHeight), lngMin + ((binResolution - j)*binWidth)]];
 
-        L.rectangle(binBounds,
-          {
-            fillColor: binColorScale(binsAggregate[j][i]),
-            color: binsAggregate[j][i] === 0 ? "gray": "white",
-            weight: binsAggregate[j][i] === 0 ? 0.5: 2,
-            className: "bin bin" + j + "_" + i,
-            // opacity: binsAggregate[j][i] === 0 ? 0 : 1,
-            fillOpacity: binsAggregate[j][i] === 0 ? 0 : 0.5
-          })
-        .addTo(map);
+          L.rectangle(binBounds,
+            {
+              fillColor: binColorScale(binsAggregate[j][i]),
+              color: binsAggregate[j][i] === 0 ? "gray": "white",
+              weight: binsAggregate[j][i] === 0 ? 0.5: 2,
+              className: "bin bin" + j + "_" + i,
+              // opacity: binsAggregate[j][i] === 0 ? 0 : 1,
+              fillOpacity: binsAggregate[j][i] === 0 ? 0 : 0.5
+            })
+          .addTo(map);
+        }
       }
     }
 
@@ -461,7 +469,7 @@ var useData = function(pe, data) {
     var startDate = new Date("2015-01-01T12:00:00"),
       endDate = new Date("2015-01-03T12:00:00");
 
-    var event = "2015-01-01T23:59:00";
+    var event = "2015-01-02T12:00:00";
     var eventTime = new Date(event).getTime();
 
     var numTimesteps = (endDate.getTime() - startDate.getTime()) / (15 * 60000) + 1;
@@ -627,6 +635,10 @@ function disableInteraction(map) {
   map.keyboard.disable();
   if (map.tap) map.tap.disable();
   document.getElementById('map').style.cursor='default';
+
+  d3.select("#queryOrig").attr("disabled", "disabled");
+  d3.select("#queryDest").attr("disabled", "disabled");
+  d3.select("#modeToggle").attr("disabled", "disabled");
 }
 
 function enableInteraction(map) {
@@ -638,18 +650,25 @@ function enableInteraction(map) {
   map.keyboard.enable();
   if (map.tap) map.tap.enable();
   document.getElementById('map').style.cursor='';
+
+  d3.select("#queryOrig").attr("disabled", null);
+  d3.select("#queryDest").attr("disabled", null);
+  d3.select("#modeToggle").attr("disabled", null);
 }
 
 function drawTimeChart(tID) {
   var tractData = time.aggregated[tID];
 
-  d3.select("#tractOverTime")
-  .select("#graphInLabel")
-    .text(time.maxPorD + " Dropoffs");
+  var tractMaxDropoff = d3.max(tractData.byTime, el => el.dropoff),
+    tractMaxPickup = d3.max(tractData.byTime, el => el.pickup);
 
   d3.select("#tractOverTime")
-  .select("#graphOutLabel")
-    .text(time.maxPorD + " Pickups")
+  .select("#graphInMax")
+    .text("Max: " + tractMaxDropoff);
+
+  d3.select("#tractOverTime")
+  .select("#graphOutMax")
+    .text("Max: " + tractMaxPickup)
 
   var svg = d3.select("#tractTimeGraph");
 
@@ -666,11 +685,13 @@ function drawTimeChart(tID) {
     destColor = "#b35806";
 
   var origScale = d3.scaleLinear()
-    .domain([0, time.maxPorD])
+    // .domain([0, time.maxPorD])
+    .domain([0, d3.max([tractMaxDropoff, tractMaxPickup])])
     .range([(height / 2) + 2, height - padding]);
 
   var destScale = d3.scaleLinear()
-    .domain([0, time.maxPorD])
+    // .domain([0, time.maxPorD])
+    .domain([0, d3.max([tractMaxDropoff, tractMaxPickup])])
     .range([(height / 2) - 2, padding]);
 
   var xScale = d3.scaleLinear()
@@ -683,7 +704,7 @@ function drawTimeChart(tID) {
     })
     .y0(height/2)
     .y1((d) => origScale(d.pickup))
-    .curve(d3.curveBasis);
+    .curve(d3.curveMonotoneX);
 
   var destArea = d3.area()
     .x((d, i) => {
@@ -691,7 +712,7 @@ function drawTimeChart(tID) {
     })
     .y0(height/2)
     .y1((d) => destScale(d.dropoff))
-    .curve(d3.curveBasis);
+    .curve(d3.curveMonotoneX);
 
   // clear chart and overlay
   var chart = svg.select("#chart");
@@ -702,14 +723,25 @@ function drawTimeChart(tID) {
 
   overlay.selectAll("*").remove();
 
-  // draw center axis
-  // overlay.append("line")
-  //   .attr("x1", padding)
-  //   .attr("x2", width - padding)
-  //   .attr("y1", height / 2)
-  //   .attr("y2", height / 2)
-  //   .style("stroke-width", 1)
-  //   .style("stroke", "black");
+  // draw max pickup line
+  overlay.append("line")
+    .attr("x1", padding)
+    .attr("x2", width - padding)
+    .attr("y1", origScale(tractMaxPickup))
+    .attr("y2", origScale(tractMaxPickup))
+    .style("stroke-width", 1)
+    .style("stroke", "#333333")
+    .style("stroke-dasharray", "3, 2");
+
+  // draw max dropoff line
+  overlay.append("line")
+    .attr("x1", padding)
+    .attr("x2", width - padding)
+    .attr("y1", destScale(tractMaxDropoff))
+    .attr("y2", destScale(tractMaxDropoff))
+    .style("stroke-width", 1)
+    .style("stroke", "#333333")
+    .style("stroke-dasharray", "3, 2");
 
   overlay.append("rect")
     .attr("x", (time.eventTimestep * timestepWidth) - (eventBarWidth / 2))

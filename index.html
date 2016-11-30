@@ -175,17 +175,32 @@
       position: absolute;
 
       font-size: 12px;
+      color: white;
       font-weight: bold;
       font-family: Helvetica, sans-serif;
 
-      left: 5px;
+      padding: 3px;
+
+      background-color: rgba(100,100,100, 0.5);
     }
 
     #graphInLabel {
+      left: 5px;
       top: 5px;
     }
 
     #graphOutLabel {
+      left: 5px;
+      bottom: 5px;
+    }
+
+    #graphInMax {
+      right: 5px;
+      top: 5px;
+    }
+
+    #graphOutMax {
+      right: 5px;
       bottom: 5px;
     }
 
@@ -220,9 +235,9 @@
     <button id="modeToggle" type="button" onclick="toggleMode()">Toggle Mode</button>
 
     <div id="queryControls">
-      <button id="queryOrig" name="queryOrig" type="button" onclick="queryArea(this)">Query<br>Origin</button>
+      <button id="queryOrig" name="queryOrig" type="button" onclick="queryArea(this)">Query<br>Pickups</button>
 
-      <button id="queryDest" name="queryDest" onclick="queryArea(this)">Query<br>Destination</button>
+      <button id="queryDest" name="queryDest" type="button" onclick="queryArea(this)">Query<br>Dropoffs</button>
     </div>
 
     <div id="legends">
@@ -240,7 +255,7 @@
 
       </div>
       <div id ="gridLegend">
-        Grid
+        <span id="gridName">Grid</span>
         <span class="scale minScale" id="gridMin">
           0
         </span>
@@ -262,10 +277,17 @@
       </g>
     </svg>
     <span id="graphInLabel" class="graphLabel">
-      In
+      Dropoffs
     </span>
     <span id="graphOutLabel" class="graphLabel">
-      Out
+      Pickups
+    </span>
+
+    <span id="graphInMax" class="graphLabel">
+      Dropoffs
+    </span>
+    <span id="graphOutMax" class="graphLabel">
+      Pickups
     </span>
   </div>
 </body>
