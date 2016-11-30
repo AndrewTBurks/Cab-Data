@@ -17,7 +17,7 @@ var tractColorScale = d3.scaleLinear()
   .domain([0,1])
   .range(["#fee0b6", "#f1a340", "#b35806"]);
 
-var binColorScale = d3.scaleLinear() 
+var binColorScale = d3.scaleLinear()
   .domain([0,1])
   .range(["#998ec3", "#542788"]);
 
@@ -27,7 +27,7 @@ var changeColorScale = d3.scaleLinear()
 
 var query = {
   base: "https://data.cityofchicago.org/resource/wrvz-psew.json/?",
-  limit: "$limit=100000", // 100,000
+  limit: "$limit=100000", // 10,000
   query: "$select=pickup_centroid_location, dropoff_centroid_location, pickup_census_tract, dropoff_census_tract",
   time: "$where=trip_start_timestamp between '2015-01-01T12:00:00' and '2016-02-01T14:00:00'",
   group: "$group=dropoff_census_tract",
@@ -46,10 +46,10 @@ var query = {
     }
 
     if (bounds) {
-      within = "$where=within_box(" + withinVar + ", " + 
+      within = "$where=within_box(" + withinVar + ", " +
         bounds._northEast.lat + ", " + bounds._southWest.lng + ", " +
         bounds._southWest.lat + ", " + bounds._northEast.lng + ")" + " AND " +
-        "NOT within_box(" + notWithinVar + ", " + 
+        "NOT within_box(" + notWithinVar + ", " +
         bounds._northEast.lat + ", " + bounds._southWest.lng + ", " +
         bounds._southWest.lat + ", " + bounds._northEast.lng + ")" + " AND " +
         "trip_start_timestamp between '2015-01-01T12:00:00' and '2016-02-01T14:00:00'";
@@ -63,17 +63,18 @@ var query = {
 
 var time = {
   base: "https://data.cityofchicago.org/resource/wrvz-psew.json/?",
-  limit: "$limit=100000", // 100,000
+  limit: "$limit=100000", // 10,000
   query: "$select=pickup_centroid_location, dropoff_centroid_location, pickup_census_tract, dropoff_census_tract, trip_start_timestamp, trip_end_timestamp",
   group: "$group=trip_start_timestamp",
   make: function(start = "2015-01-01T12:00:00", end = "2015-01-03T12:00:00") {
 
-    var within = "$where=trip_start_timestamp between '" + start + "' and '" + end + "'" + " OR " + 
+    var within = "$where=trip_start_timestamp between '" + start + "' and '" + end + "'" + " OR " +
       "trip_end_timestamp between '" + start + "' and '" + end + "'"
 
     return this.base + [this.query,this.limit,within].join("&");
   },
-  aggregated: null
+  aggregated: null,
+
 }
 
 function init() {
@@ -105,14 +106,31 @@ function init() {
   d3.json("./tracts.geojson", (err, data) => {
     function whenClicked(e) {
       // draw graph of data over time
-      if (mode === "time" && time.aggregated) {
-        console.log(time.aggregated[e.target.feature.properties.geoid10]);
+      if (mode === "time" && time.aggregated && time.aggregated[e.target.feature.properties.geoid10]) {
+        d3.selectAll(".censusTract")
+          .classed("selectedTract", false)
+          .style("stroke", function(d) {
+            if (d3.select(this).classed("isVisible")) {
+              return "black";
+            }
+            return "none";
+          })
+          .style("stroke-width", 1);
+
+        d3.select(".tract" + e.target.feature.properties.geoid10)
+          .style("stroke", "red")
+          .style("stroke-width", 3)
+          .classed("selectedTract", true);
+
+        // console.log(time.aggregated[e.target.feature.properties.geoid10]);
+
+        drawTimeChart(e.target.feature.properties.geoid10);
       }
     }
 
     function whenHovered (e) {
       d3.select(".tract" + e.target.feature.properties.geoid10)
-        .style("stroke", "red")
+        .style("stroke", "gold")
         .style("stroke-width", 3);
 
       d3.select("#tip")
@@ -121,7 +139,7 @@ function init() {
         .style("top", e.containerPoint.y - 45 + "px")
         .node().innerHTML = "Tract:<br>" + e.target.feature.properties.geoid10;
     }
-    
+
 
     function onEachFeature(feature, layer) {
         //bind click
@@ -132,11 +150,19 @@ function init() {
               d3.select(".tract" + e.target.feature.properties.geoid10)
                 .style("stroke", function(d) {
                   if (d3.select(this).classed("isVisible")) {
+                    if (d3.select(this).classed("selectedTract")) {
+                      return "red";
+                    }
                     return "black";
                   }
                   return "none";
                 })
-                .style("stroke-width", 1);
+                .style("stroke-width", function(d) {
+                  if (d3.select(this).classed("selectedTract")) {
+                    return 3;
+                  }
+                  return 1;
+                });
 
               d3.select("#tip")
                 .style("display", "none");
@@ -162,7 +188,7 @@ function init() {
     dataRequest(query.make(), useData);
   });
 
-  
+
 }
 
 function queryArea(mode) {
@@ -202,11 +228,15 @@ function toggleMode() {
     d3.select("#gridLegend")
       .style("display", "none");
 
-      d3.select("#tractMid")
+    d3.select("#tractMid")
       .style("display", "initial");
 
     d3.select("#tractName")
       .text("Change");
+
+    d3.select("#tractOverTime")
+      .style("display", "initial");
+
 
     d3.selectAll(".currSelection")
       .style("display", "none");
@@ -237,7 +267,7 @@ function toggleMode() {
       .style("display", "initial");
 
     d3.select("#gridLegend")
-    .style("display", "initial");
+      .style("display", "initial");
 
     d3.select("#tractMid")
       .style("display", "none");
@@ -245,9 +275,15 @@ function toggleMode() {
     d3.select("#tractName")
       .text("Tract");
 
+    d3.select("#tractOverTime")
+      .style("display", "none");
+
+    d3.selectAll(".censusTract")
+      .classed("selectedTract", false);
+
     // dest
     d3.select("#tractLegend")
-      .style("background", queryMode === "queryOrig" ? 
+      .style("background", queryMode === "queryOrig" ?
         "linear-gradient(to right, #fee0b6, #f1a340, #b35806)" : // origin
         "linear-gradient(to right, #d8daeb, #998ec3, #542788)"); // destination
 
@@ -276,7 +312,7 @@ var useData = function(pe, data) {
         .style("background", "linear-gradient(to right, #fee0b6, #f1a340, #b35806)");
       d3.select("#gridLegend")
         .style("background", "linear-gradient(to right, #998ec3, #542788)");
-        
+
     } else {
       withinVar = "dropoff_centroid_location";
       notWithinVar = "pickup_census_tract";
@@ -291,7 +327,7 @@ var useData = function(pe, data) {
     }
 
     console.log(pe);
-    var filtered = data.filter((el) => el.dropoff_centroid_location && el.pickup_centroid_location)
+    var filtered = data.filter((el) => el.dropoff_centroid_location && el.pickup_centroid_location && el.dropoff_census_tract && el.pickup_census_tract)
 
     for (obj of objects) {
       obj.remove();
@@ -329,9 +365,9 @@ var useData = function(pe, data) {
 
 
       // aggregate bin origins
-      var x = Math.floor(binResolution * ((selectionBounds._northEast.lng - el[withinVar].coordinates[0]) / 
+      var x = Math.floor(binResolution * ((selectionBounds._northEast.lng - el[withinVar].coordinates[0]) /
           (selectionBounds._northEast.lng - selectionBounds._southWest.lng)));
-        y = Math.floor(binResolution * ((selectionBounds._southWest.lat - el[withinVar].coordinates[1]) / 
+        y = Math.floor(binResolution * ((selectionBounds._southWest.lat - el[withinVar].coordinates[1]) /
           (selectionBounds._southWest.lat - selectionBounds._northEast.lat)));
 
       if (x < binResolution && x >= 0 && y < binResolution && y >= 0) {
@@ -353,8 +389,8 @@ var useData = function(pe, data) {
         return d3.max(el);
       });
 
-    // binColorScale.domain([binMin, (binMax + binMin) / 2, binMax]); 
-    binColorScale.domain([binMin, binMax]); 
+    // binColorScale.domain([binMin, (binMax + binMin) / 2, binMax]);
+    binColorScale.domain([binMin, binMax]);
 
     d3.select("#tractMax")
       .text(tractExtent[1]);
@@ -386,7 +422,7 @@ var useData = function(pe, data) {
 
         L.rectangle(binBounds,
           {
-            fillColor: binColorScale(binsAggregate[j][i]), 
+            fillColor: binColorScale(binsAggregate[j][i]),
             color: binsAggregate[j][i] === 0 ? "gray": "white",
             weight: binsAggregate[j][i] === 0 ? 0.5: 2,
             className: "bin bin" + j + "_" + i,
@@ -423,18 +459,16 @@ var useData = function(pe, data) {
     var startDate = new Date("2015-01-01T12:00:00"),
       endDate = new Date("2015-01-03T12:00:00");
 
+    var event = "2015-01-01T23:59:00";
+    var eventTime = new Date(event).getTime();
+
     var numTimesteps = (endDate.getTime() - startDate.getTime()) / (15 * 60000) + 1;
+
+    // timestep of the event
+    time.eventTimestep = numTimesteps - Math.ceil((endDate.getTime() - eventTime) / (15*60000));
 
     var timesteps = {};
 
-    // 15 minute intervals (trips are on 15 minute intervals also)
-    // for (var t = startDate.getTime(); t <= endDate.getTime(); t += (15 * 60000)) {
-    //   timesteps["" + t] = {pickup: 0, dropoff: 0};
-    // }
-
-
-    var event = "2015-01-02T12:00:00";
-    var eventTime = new Date(event).getTime();
 
 
     var filtered = data.filter((el) => el.dropoff_census_tract && el.pickup_census_tract);
@@ -473,7 +507,7 @@ var useData = function(pe, data) {
         // for (var key in Object.keys(timesteps)) {
         //   aggregated[t.dropoff_census_tract].byTime[key] = {pickup: 0, dropoff: 0};
         // }
-      
+
         for (var i = 0; i < numTimesteps; i++) {
           aggregated[t.dropoff_census_tract].byTime[i] = {pickup: 0, dropoff: 0};
         }
@@ -482,9 +516,9 @@ var useData = function(pe, data) {
       var tripStart = new Date(t.trip_start_timestamp).getTime();
       var tripEnd = new Date(t.trip_end_timestamp).getTime();
 
-      // save trip start if within window 
+      // save trip start if within window
       if (tripStart <= endDate.getTime() && tripStart >= startDate.getTime()) {
-        aggregated[t.pickup_census_tract].byTime[Math.round((endDate.getTime() - tripStart) / (15*60000))].pickup++;
+        aggregated[t.pickup_census_tract].byTime[numTimesteps - 1 - Math.ceil((endDate.getTime() - tripStart) / (15*60000))].pickup++;
 
         if (tripStart < eventTime) {
           aggregated[t.pickup_census_tract].before.pickup++;
@@ -505,23 +539,45 @@ var useData = function(pe, data) {
       }
     }
 
-    var changeExtent = d3.extent(Object.keys(aggregated), 
+    time.maxPorD = d3.max(Object.keys(aggregated), (tract) => {
+      return d3.max(aggregated[tract].byTime, (time) => d3.max([time.pickup, time.dropoff]));
+    });
+
+    console.log(time.maxPorD);
+
+    var changeExtent = d3.extent(Object.keys(aggregated),
       t => (aggregated[t].after.pickup + aggregated[t].after.dropoff) - (aggregated[t].before.pickup + aggregated[t].before.dropoff));
 
-    changeColorScale.domain([changeExtent[0], 0, changeExtent[1]]);
+    // changeColorScale.domain([changeExtent[0], 0, changeExtent[1]]);
+
+    changeColorScale.domain([-1, 0, 1]);
+
+    var opacityScale = d3.scaleLinear()
+      .domain([0, d3.max(
+        Object.keys(aggregated), t => {
+          // sum total trips
+          return aggregated[t].after.pickup + aggregated[t].after.dropoff + aggregated[t].before.pickup + aggregated[t].before.dropoff;
+        }
+      )])
+      .range([0.25, 0.9]);
 
     d3.select("#tractMax")
-      .text(changeExtent[1]);
+      // .text("+" + changeExtent[1]);
+      .text("+100%");
 
     d3.select("#tractMin")
-      .text(changeExtent[0]);
+      // .text(changeExtent[0]);
+      .text("-100%");
 
     for(var t of Object.keys(aggregated)) {
       var change = (aggregated[t].after.pickup + aggregated[t].after.dropoff) - (aggregated[t].before.pickup + aggregated[t].before.dropoff);
-  
+      var total = aggregated[t].after.pickup + aggregated[t].after.dropoff + aggregated[t].before.pickup + aggregated[t].before.dropoff;
+
       d3.select(".tract" + t)
-        .style("fill", changeColorScale(change))
-        .style("fill-opacity", 0.5)
+        .style("fill", changeColorScale(change/total))
+        // .style("fill-opacity", 1)
+        .style("fill-opacity", opacityScale(total))
+        .style("stroke-opacity", opacityScale(total))
         .style("stroke", "black")
         .classed("isVisible", true);
     }
@@ -580,4 +636,97 @@ function enableInteraction(map) {
   map.keyboard.enable();
   if (map.tap) map.tap.enable();
   document.getElementById('map').style.cursor='';
+}
+
+function drawTimeChart(tID) {
+  var tractData = time.aggregated[tID];
+
+  var svg = d3.select("#tractTimeGraph");
+
+  var width = svg.node().clientWidth,
+    height = svg.node().clientHeight;
+
+  var padding = 5;
+
+  var eventBarWidth = 10;
+  var timestepWidth = (width - (padding * 2)) / tractData.byTime.length;
+
+  // #542788, #f7f7f7, #b35806
+  var origColor = "#542788",
+    destColor = "#b35806";
+
+  var origScale = d3.scaleLinear()
+    .domain([0, time.maxPorD])
+    .range([(height / 2) + 2, height - padding]);
+
+  var destScale = d3.scaleLinear()
+    .domain([0, time.maxPorD])
+    .range([(height / 2) - 2, padding]);
+
+  var xScale = d3.scaleLinear()
+    .domain([0, tractData.byTime.length])
+    .range([padding, width - padding]);
+
+  var origArea = d3.area()
+    .x((d, i) => {
+      return xScale(i);
+    })
+    .y0(height/2)
+    .y1((d) => origScale(d.pickup))
+    .curve(d3.curveBasis);
+
+  var destArea = d3.area()
+    .x((d, i) => {
+      return xScale(i);
+    })
+    .y0(height/2)
+    .y1((d) => destScale(d.dropoff))
+    .curve(d3.curveBasis);
+
+  // clear chart and overlay
+  var chart = svg.select("#chart");
+
+  chart.selectAll("*").remove();
+
+  var overlay = svg.select("#overlay");
+
+  overlay.selectAll("*").remove();
+
+  // draw center axis
+  // overlay.append("line")
+  //   .attr("x1", padding)
+  //   .attr("x2", width - padding)
+  //   .attr("y1", height / 2)
+  //   .attr("y2", height / 2)
+  //   .style("stroke-width", 1)
+  //   .style("stroke", "black");
+
+  overlay.append("rect")
+    .attr("x", (time.eventTimestep * timestepWidth) - (eventBarWidth / 2))
+    .attr("y", padding)
+    .attr("width", eventBarWidth)
+    .attr("height", height - (padding * 2))
+    .style("fill", "yellow")
+    .style("fill-opacity", 0.25)
+    .style("stroke", "yellow");
+
+
+  // draw graph
+
+  chart.append("path")
+    .datum(tractData.byTime)
+    .attr("class", "origArea")
+    .attr("d", origArea)
+    .style("fill", origColor)
+    .style("stroke", origColor)
+    .style("fill-opacity", 0.5);
+
+  chart.append("path")
+    .datum(tractData.byTime)
+    .attr("class", "destArea")
+    .attr("d", destArea)
+    .style("fill", destColor)
+    .style("stroke", destColor)
+    .style("fill-opacity", 0.5);
+
 }

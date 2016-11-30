@@ -23,6 +23,8 @@
 			height: 100%;
 		}
 
+    /*Start Controls*/
+
     #controls {
       position:absolute;
       top: 0px;
@@ -31,22 +33,13 @@
       margin: 10px;
       padding: 5px;
 
-      height: 80%;
+      height: 50%;
 
       text-align: center;
       font-family: Helvetica, sansserif;
 
       background-color: rgba(100,100,100,0.5);
-      /*background: linear-gradient(to right, red, yellow);*/
     }
-
-    /*#queryControls {
-      position: absolute;
-      bottom: 0px;
-      width: 100%;
-
-      padding-bottom: 100px;
-    }*/
 
     #modeTitle {
       font-weight: bold;
@@ -124,12 +117,12 @@
     }
 
     .minScale {
-      left: 0px;
+      left: 2px;
       text-align: left;
     }
 
     .maxScale {
-      right: 0px;
+      right: 2px;
       text-align: right;
     }
 
@@ -159,6 +152,46 @@
       background-color: rgba(255,255,255,0.8);
     }
 
+    /*End Controls*/
+
+    /*Start Tract Graph*/
+
+    #tractOverTime {
+      display: none;
+
+      position: absolute;
+      z-index: 1500;
+
+      right: 5px;
+      bottom: 25px;
+
+      width: 27.50%;
+      height: 40%;
+
+      background-color: rgba(200,200,200,0.75);
+    }
+
+    .graphLabel {
+      position: absolute;
+
+      font-size: 12;
+      font-weight: bold;
+      font-family: Helvetica, sans-serif;
+
+      left: 5px;
+    }
+
+    #graphInLabel {
+      top: 5px;
+    }
+
+    #graphOutLabel {
+      bottom: 5px;
+    }
+
+    /*End Tract Graph*/
+
+
 		.leaflet-areaselect-container {
 		  position:absolute;
 		  width:100%;
@@ -177,7 +210,7 @@
 
 <body onload="init()">
   <div id="tip">
-    
+
   </div>
 	<div id="map">
 
@@ -216,6 +249,23 @@
         </span>
       </div>
     </div>
-    
+
+  </div>
+
+  <div id="tractOverTime">
+    <svg id="tractTimeGraph" width="100%" height="100%">
+      <g id="chart">
+
+      </g>
+      <g id="overlay">
+
+      </g>
+    </svg>
+    <span id="graphInLabel" class="graphLabel">
+      In
+    </span>
+    <span id="graphOutLabel" class="graphLabel">
+      Out
+    </span>
   </div>
 </body>
