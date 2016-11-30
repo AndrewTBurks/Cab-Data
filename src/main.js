@@ -413,6 +413,8 @@ var useData = function(pe, data) {
         })
         .style("fill-opacity", 0.5)
         .style("stroke", "black")
+        .style("stroke-opacity", 1)
+        .style("stroke-width", 1)
         .classed("isVisible", true);
     }
 
@@ -640,6 +642,14 @@ function enableInteraction(map) {
 
 function drawTimeChart(tID) {
   var tractData = time.aggregated[tID];
+
+  d3.select("#tractOverTime")
+  .select("#graphInLabel")
+    .text(time.maxPorD + " Dropoffs");
+
+  d3.select("#tractOverTime")
+  .select("#graphOutLabel")
+    .text(time.maxPorD + " Pickups")
 
   var svg = d3.select("#tractTimeGraph");
 
