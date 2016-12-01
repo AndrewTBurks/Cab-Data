@@ -27,9 +27,9 @@ var changeColorScale = d3.scaleLinear()
 
 var query = {
   base: "https://data.cityofchicago.org/resource/wrvz-psew.json/?",
-  limit: "$limit=10000", // 10,000
+  limit: "$limit=1000", // 10,000
   query: "$select=pickup_centroid_location, dropoff_centroid_location, pickup_census_tract, dropoff_census_tract",
-  time: "$where=trip_start_timestamp between '2015-01-01T12:00:00' and '2016-02-01T14:00:00'",
+  time: "$where=trip_start_timestamp between '2015-01-01T12:00:00' and '2015-01-05T12:00:00'",
   group: "$group=dropoff_census_tract",
   make: function(bounds) {
     var within;
