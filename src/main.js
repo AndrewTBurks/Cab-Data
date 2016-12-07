@@ -25,6 +25,10 @@ var changeColorScale = d3.scaleLinear()
   .domain([-10, 0, 10])
   .range(["#542788", "#f7f7f7", "#b35806"]);
 
+	var opacityScale = d3.scaleLinear()
+		.domain([0, 100])
+		.range([0.25, 0.9]);
+
 var query = {
   base: "https://data.cityofchicago.org/resource/wrvz-psew.json/?",
   limit: "$limit=1000", // 10,000
@@ -52,9 +56,11 @@ var query = {
         "NOT within_box(" + notWithinVar + ", " +
         bounds._northEast.lat + ", " + bounds._southWest.lng + ", " +
         bounds._southWest.lat + ", " + bounds._northEast.lng + ")" + " AND " +
-        "trip_start_timestamp between '2015-01-01T12:00:00' and '2016-02-01T14:00:00'";
+				(queryMode === queryOrig ? "trip_start_timestamp" : "trip_end_timestamp") +
+				" between '2015-01-01T12:00:00' and '2016-02-01T14:00:00'";
     } else {
-      within = "$where=trip_start_timestamp between '2015-01-01T12:00:00' and '2016-02-01T14:00:00'";
+      within = "$where=" + (queryMode === queryOrig ? "trip_start_timestamp" : "trip_end_timestamp") +
+			" between '2015-01-01T12:00:00' and '2016-02-01T14:00:00'";
     }
 
     return this.base + [this.query,this.limit,within].join("&");
@@ -225,8 +231,11 @@ function toggleMode() {
     d3.select("#queryControls")
       .style("display", "none");
 
-    d3.select("#gridLegend")
-      .style("display", "none");
+    // d3.select("#gridLegend")
+    //   .style("display", "none");
+
+		d3.select("#gridMid")
+      .style("display", "initial");
 
     d3.select("#tractMid")
       .style("display", "initial");
@@ -234,9 +243,11 @@ function toggleMode() {
     d3.select("#tractName")
       .text("Change");
 
+		d3.select("#gridName")
+			.text("Volume");
+
     d3.select("#tractOverTime")
       .style("display", "initial");
-
 
     d3.selectAll(".currSelection")
       .style("display", "none");
@@ -244,6 +255,9 @@ function toggleMode() {
 
     d3.select("#tractLegend")
       .style("background", "linear-gradient(to right, #542788, #f7f7f7, #b35806)");
+
+		d3.select("#gridLegend")
+			.style("background", "linear-gradient(to right, #6b8da5, #e6d5c4");
 
     d3.select(".leaflet-areaselect-container")
       .style("display", "none");
@@ -266,8 +280,8 @@ function toggleMode() {
     d3.select("#queryControls")
       .style("display", "initial");
 
-    d3.select("#gridLegend")
-      .style("display", "initial");
+			d3.select("#gridMid")
+	      .style("display", "none");
 
     d3.select("#tractMid")
       .style("display", "none");
@@ -479,8 +493,6 @@ var useData = function(pe, data) {
 
     var timesteps = {};
 
-
-
     var filtered = data.filter((el) => el.dropoff_census_tract && el.pickup_census_tract);
 
     var aggregated = time.aggregated = {};
@@ -495,10 +507,6 @@ var useData = function(pe, data) {
           byTime: new Array(numTimesteps)
         }
 
-        // for (var key in Object.keys(timesteps)) {
-        //   aggregated[t.pickup_census_tract].byTime[key] = {pickup: 0, dropoff: 0};
-        // }
-
         for (var i = 0; i < numTimesteps; i++) {
           aggregated[t.pickup_census_tract].byTime[i] = {pickup: 0, dropoff: 0};
         }
@@ -509,14 +517,8 @@ var useData = function(pe, data) {
         aggregated[t.dropoff_census_tract] = {
           before: {pickup: 0, dropoff: 0},
           after: {pickup: 0, dropoff: 0},
-          // byTime: Object.assign({}, timesteps)
-          // byTime: {}
           byTime: new Array(numTimesteps)
         }
-
-        // for (var key in Object.keys(timesteps)) {
-        //   aggregated[t.dropoff_census_tract].byTime[key] = {pickup: 0, dropoff: 0};
-        // }
 
         for (var i = 0; i < numTimesteps; i++) {
           aggregated[t.dropoff_census_tract].byTime[i] = {pickup: 0, dropoff: 0};
@@ -562,14 +564,21 @@ var useData = function(pe, data) {
 
     changeColorScale.domain([-1, 0, 1]);
 
-    var opacityScale = d3.scaleLinear()
-      .domain([0, d3.max(
-        Object.keys(aggregated), t => {
-          // sum total trips
-          return aggregated[t].after.pickup + aggregated[t].after.dropoff + aggregated[t].before.pickup + aggregated[t].before.dropoff;
-        }
-      )])
-      .range([0.25, 0.9]);
+    opacityScale
+      .domain([
+				d3.min(
+	        Object.keys(aggregated), t => {
+	          // sum total trips
+	          return aggregated[t].after.pickup + aggregated[t].after.dropoff + aggregated[t].before.pickup + aggregated[t].before.dropoff;
+	        }
+      	),
+				d3.max(
+	        Object.keys(aggregated), t => {
+	          // sum total trips
+	          return aggregated[t].after.pickup + aggregated[t].after.dropoff + aggregated[t].before.pickup + aggregated[t].before.dropoff;
+	        }
+      	)
+			]);
 
     d3.select("#tractMax")
       // .text("+" + changeExtent[1]);
@@ -579,13 +588,18 @@ var useData = function(pe, data) {
       // .text(changeExtent[0]);
       .text("-100%");
 
+			d3.select("#gridMax")
+	      .text(opacityScale.domain()[1]);
+
+	    d3.select("#gridMin")
+	      .text(opacityScale.domain()[0]);
+
     for(var t of Object.keys(aggregated)) {
       var change = (aggregated[t].after.pickup + aggregated[t].after.dropoff) - (aggregated[t].before.pickup + aggregated[t].before.dropoff);
       var total = aggregated[t].after.pickup + aggregated[t].after.dropoff + aggregated[t].before.pickup + aggregated[t].before.dropoff;
 
       d3.select(".tract" + t)
         .style("fill", changeColorScale(change/total))
-        // .style("fill-opacity", 1)
         .style("fill-opacity", opacityScale(total))
         .style("stroke-opacity", opacityScale(total))
         .style("stroke", "black")
